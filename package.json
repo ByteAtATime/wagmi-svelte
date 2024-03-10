@@ -28,6 +28,10 @@
     "./chains": {
       "types": "./dist/lib/chains/index.d.ts",
       "svelte": "./dist/lib/chains/index.js"
+    },
+    "./connectors": {
+      "types": "./dist/lib/connectors/index.d.ts",
+      "svelte": "./dist/lib/connectors/index.js"
     }
   },
   "devDependencies": {
