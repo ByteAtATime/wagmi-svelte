@@ -1,7 +1,7 @@
 {
   "name": "@byteatatime/wagmi-svelte",
   "//": "When changing the version, remember to update src/lib/version.ts",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "scripts": {
     "dev": "vite dev",
