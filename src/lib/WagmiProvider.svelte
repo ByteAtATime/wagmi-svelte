@@ -1,13 +1,15 @@
 <script lang="ts">
   import { QueryClient, QueryClientProvider } from "@tanstack/svelte-query";
   import { hydrate, type ResolvedRegister, type State } from "@wagmi/core";
-  import { setContext } from "svelte";
+  import { setContext, type Snippet } from "svelte";
 
   const {
+    children,
     config,
     initialState,
     reconnectOnMount = true,
   } = $props<{
+    children: Snippet;
     config: ResolvedRegister["config"];
     initialState?: State | undefined;
     reconnectOnMount?: boolean | undefined;
@@ -31,5 +33,5 @@
 </script>
 
 <QueryClientProvider client={queryClient}>
-  <slot />
+  {@render children()}
 </QueryClientProvider>
