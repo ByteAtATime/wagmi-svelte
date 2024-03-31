@@ -32,7 +32,7 @@ export type CreateDisconnectReturnType<context = unknown> = RuneReturnType<
   >
 >;
 
-export function CreateDisconnect<context = unknown>(
+export function createDisconnect<context = unknown>(
   parameters: CreateDisconnectParameters<context> = {},
 ): CreateDisconnectReturnType<context> {
   const { mutation } = parameters;
