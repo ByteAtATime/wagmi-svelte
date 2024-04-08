@@ -69,7 +69,7 @@ export function createReadContract<
 
   const options = readContractQueryOptions<config, abi, functionName, args>(
     config.result as config,
-    { ...(parameters as any), chainId: parameters.chainId ?? chainId },
+    { ...(parameters as any), chainId: parameters.chainId ?? chainId.result },
   );
   const enabled = $derived(Boolean(address && abi && functionName && (query.enabled ?? true)));
 
