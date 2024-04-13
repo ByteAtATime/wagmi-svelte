@@ -1,4 +1,10 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type EstimateFeesPerGasErrorType, type ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -13,14 +19,15 @@ import type { FeeValuesType } from "viem";
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreateEstimateFeesPerGasParameters<
   type extends FeeValuesType = FeeValuesType,
   config extends Config = Config,
   selectData = EstimateFeesPerGasData<type>,
-> = Evaluate<
-  EstimateFeesPerGasOptions<type, config> &
+> = FuncOrVal<
+  Evaluate<
+    EstimateFeesPerGasOptions<type, config> &
     ConfigParameter<config> &
     QueryParameter<
       EstimateFeesPerGasQueryFnData<type>,
@@ -28,6 +35,7 @@ export type CreateEstimateFeesPerGasParameters<
       selectData,
       EstimateFeesPerGasQueryKey<config, type>
     >
+  >
 >;
 
 export type CreateEstimateFeesPerGasReturnType<
@@ -42,18 +50,21 @@ export function createEstimateFeesPerGas<
 >(
   parameters: CreateEstimateFeesPerGasParameters<type, config, selectData> = {},
 ): CreateEstimateFeesPerGasReturnType<type, selectData> {
-  const { query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = estimateFeesPerGasQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    estimateFeesPerGasQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
 
-  const store = createQuery({ ...query, ...options });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options })));
 
   return storeToRune(store);
 }

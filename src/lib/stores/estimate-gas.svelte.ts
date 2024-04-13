@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, EstimateGasErrorType } from "@wagmi/core";
 import {
@@ -19,14 +25,16 @@ export type CreateEstimateGasParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | undefined = undefined,
   selectData = EstimateGasData,
-> = EstimateGasOptions<config, chainId> &
+> = FuncOrVal<
+  EstimateGasOptions<config, chainId> &
   ConfigParameter<config> &
   QueryParameter<
     EstimateGasQueryFnData,
     EstimateGasErrorType,
     selectData,
     EstimateGasQueryKey<config, chainId>
-  >;
+  >
+>;
 
 export type CreateEstimateGasReturnType<selectData = EstimateGasData> = RuneReturnType<
   QueryObserverResult<selectData, EstimateGasErrorType>
@@ -35,37 +43,31 @@ export type CreateEstimateGasReturnType<selectData = EstimateGasData> = RuneRetu
 export function createEstimateGas(
   parameters: CreateEstimateGasParameters = {},
 ): CreateEstimateGasReturnType {
-  const { connector, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { connector, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const connectorClient = createConnectorClient({
-    connector,
-    query: { enabled: parameters.account === undefined },
-  });
-  const account = $derived(parameters.account ?? connectorClient.result.data?.account);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const connectorClient = $derived.by(
+    createConnectorClient(() => ({
+      connector,
+      query: { enabled: resolvedParameters.account === undefined },
+    })),
+  );
+  const account = $derived(resolvedParameters.account ?? connectorClient.data?.account);
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = estimateGasQueryOptions(config.result, {
-    ...parameters,
-    account,
-    chainId,
-    connector,
-  });
+  const options = $derived(
+    estimateGasQueryOptions(config, {
+      ...resolvedParameters,
+      account,
+      chainId,
+      connector,
+    }),
+  );
   const enabled = $derived(Boolean((account || connector) && (query.enabled ?? true)));
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import {
   type Config,
@@ -14,7 +20,6 @@ import {
   type GetTransactionConfirmationsQueryFnData,
   type GetTransactionConfirmationsQueryKey,
 } from "@wagmi/core/query";
-import { derived } from "svelte/store";
 import { createChainId } from "./chain-id.svelte";
 import { createConfig } from "./config.svelte";
 
@@ -22,14 +27,16 @@ export type CreateTransactionConfirmationsParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | undefined = undefined,
   selectData = GetTransactionConfirmationsData,
-> = GetTransactionConfirmationsOptions<config, chainId> &
+> = FuncOrVal<
+  GetTransactionConfirmationsOptions<config, chainId> &
   ConfigParameter<config> &
   QueryParameter<
     GetTransactionConfirmationsQueryFnData,
     GetTransactionConfirmationsErrorType,
     selectData,
     GetTransactionConfirmationsQueryKey<config, chainId>
-  >;
+  >
+>;
 
 export type CreateTransactionConfirmationsReturnType<selectData = GetTransactionConfirmationsData> =
   RuneReturnType<QueryObserverResult<selectData, GetTransactionConfirmationsErrorType>>;
@@ -41,34 +48,26 @@ export function createTransactionConfirmations<
 >(
   parameters: CreateTransactionConfirmationsParameters<config, chainId, selectData> = {} as any,
 ): CreateTransactionConfirmationsReturnType<selectData> {
-  const { hash, transactionReceipt, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { hash, transactionReceipt, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getTransactionConfirmationsQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getTransactionConfirmationsQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = $derived(
     Boolean(
       !(hash && transactionReceipt) && (hash || transactionReceipt) && (query.enabled ?? true),
     ),
   );
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

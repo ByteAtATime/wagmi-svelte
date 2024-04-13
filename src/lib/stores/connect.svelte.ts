@@ -1,6 +1,6 @@
 import type { CreateMutationParameters } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import type { Config, ConnectErrorType, Connector, ResolvedRegister } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -14,17 +14,19 @@ import {
 import { createConfig } from "./config.svelte";
 import { createConnectors } from "./connectors.svelte";
 
-export type CreateConnectParameters<config extends Config = Config, context = unknown> = Evaluate<
-  ConfigParameter<config> & {
-    mutation?:
+export type CreateConnectParameters<config extends Config = Config, context = unknown> = FuncOrVal<
+  Evaluate<
+    ConfigParameter<config> & {
+      mutation?:
       | CreateMutationParameters<
-          ConnectData<config>,
-          ConnectErrorType,
-          ConnectVariables<config>,
-          context
-        >
+        ConnectData<config>,
+        ConnectErrorType,
+        ConnectVariables<config>,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateConnectReturnType<
@@ -51,39 +53,44 @@ export function createConnect<
 >(
   parameters: CreateConnectParameters<config, context> = {},
 ): CreateConnectReturnType<config, context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const connectors = createConnectors({ config: config.result });
+  const config = $derived.by(createConfig(parameters));
+  const connectors = $derived.by(createConnectors(() => ({ config })));
 
-  const mutationOptions = connectMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
-  });
+  const mutationOptions = $derived(connectMutationOptions(config));
+  const store = createMutation<
+    ConnectData<config>,
+    ConnectErrorType,
+    ConnectVariables<config>,
+    context
+  >(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
 
-  const mutateResult = storeToRune(store);
+  const mutateResult = $derived.by(storeToRune(store));
 
   $effect(() => {
-    config.result.subscribe(
+    config.subscribe(
       ({ status }) => status,
       (status, previousStatus) => {
-        if (previousStatus === "connected" && status === "disconnected")
-          mutateResult.result.reset();
+        if (previousStatus === "connected" && status === "disconnected") mutateResult.reset();
       },
     );
   });
 
+  type Return = ReturnType<CreateConnectReturnType<config, context>>;
   const result = $derived({
-    ...mutateResult.result,
-    connect: mutateResult.result.mutate,
-    connectAsync: mutateResult.result.mutateAsync,
-    connectors: connectors.result,
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    connect: mutateResult.mutate,
+    connectAsync: mutateResult.mutateAsync,
+    connectors: connectors,
   });
 
-  return {
-    get result() {
-      return result;
-    },
-  };
+  return () => result;
 }

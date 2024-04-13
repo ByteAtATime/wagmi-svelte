@@ -1,4 +1,4 @@
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import type { ConfigParameter, FuncOrVal, RuneReturnType } from "$lib/types";
 import {
   getAccount,
   watchAccount,
@@ -8,7 +8,9 @@ import {
 } from "@wagmi/core";
 import { createConfig } from "./config.svelte";
 
-export type CreateAccountParameters<config extends Config = Config> = ConfigParameter<config>;
+export type CreateAccountParameters<config extends Config = Config> = FuncOrVal<
+  ConfigParameter<config>
+>;
 
 export type CreateAccountReturnType<config extends Config = Config> = RuneReturnType<
   GetAccountReturnType<config>
@@ -17,23 +19,19 @@ export type CreateAccountReturnType<config extends Config = Config> = RuneReturn
 export function createAccount<config extends Config = ResolvedRegister["config"]>(
   parameters: CreateAccountParameters<config> = {},
 ): CreateAccountReturnType<config> {
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  let value = $state(getAccount(config.result));
+  let value = $state(getAccount(config));
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
     unsubscribe?.();
-    unsubscribe = watchAccount(config.result, {
+    unsubscribe = watchAccount(config, {
       onChange: (newValue) => {
         value = newValue;
       },
     });
   });
 
-  return {
-    get result() {
-      return value;
-    },
-  };
+  return () => value;
 }

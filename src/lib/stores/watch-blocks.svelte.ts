@@ -1,4 +1,9 @@
-import type { ConfigParameter, EnabledParameter } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type EnabledParameter,
+  type FuncOrVal,
+} from "$lib/types";
 import {
   watchBlocks,
   type Config,
@@ -15,10 +20,12 @@ export type CreateWatchBlocksParameters<
   blockTag extends BlockTag = "latest",
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
-> = UnionEvaluate<
-  UnionPartial<WatchBlocksParameters<includeTransactions, blockTag, config, chainId>> &
+> = FuncOrVal<
+  UnionEvaluate<
+    UnionPartial<WatchBlocksParameters<includeTransactions, blockTag, config, chainId>> &
     ConfigParameter<config> &
     EnabledParameter
+  >
 >;
 
 export type CreateWatchBlocksReturnType = void;
@@ -36,11 +43,12 @@ export function createWatchBlocks<
     chainId
   > = {} as any,
 ): CreateWatchBlocksReturnType {
-  const { enabled = true, onBlock, ...rest } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { enabled = true, onBlock, ...rest } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
@@ -48,7 +56,7 @@ export function createWatchBlocks<
     if (!onBlock) return;
 
     unsubscribe?.();
-    unsubscribe = watchBlocks(config.result, {
+    unsubscribe = watchBlocks(config, {
       ...(rest as any),
       chainId,
       onBlock,

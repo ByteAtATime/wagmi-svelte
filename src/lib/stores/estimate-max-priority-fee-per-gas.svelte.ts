@@ -1,4 +1,10 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import {
   type Config,
@@ -16,13 +22,14 @@ import {
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreateEstimateMaxPriorityFeePerGasParameters<
   config extends Config = Config,
   selectData = EstimateMaxPriorityFeePerGasData,
-> = Evaluate<
-  EstimateMaxPriorityFeePerGasOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    EstimateMaxPriorityFeePerGasOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       EstimateMaxPriorityFeePerGasQueryFnData,
@@ -30,6 +37,7 @@ export type CreateEstimateMaxPriorityFeePerGasParameters<
       selectData,
       EstimateMaxPriorityFeePerGasQueryKey<config>
     >
+  >
 >;
 
 export type CreateEstimateMaxPriorityFeePerGasReturnType<
@@ -42,18 +50,21 @@ export function createEstimateMaxPriorityFeePerGas<
 >(
   parameters: CreateEstimateMaxPriorityFeePerGasParameters<config, selectData> = {},
 ): CreateEstimateMaxPriorityFeePerGasReturnType<selectData> {
-  const { query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = estimateMaxPriorityFeePerGasQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    estimateMaxPriorityFeePerGasQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
 
-  const store = createQuery({ ...query, ...options });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options })));
 
   return storeToRune(store);
 }

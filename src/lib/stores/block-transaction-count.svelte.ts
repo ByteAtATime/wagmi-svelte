@@ -1,4 +1,12 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { createQuery } from "$lib/query";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import {
   type Config,
@@ -15,15 +23,14 @@ import {
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
-import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
 
 export type CreateBlockTransactionCountParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetBlockTransactionCountData,
-> = UnionEvaluate<
-  GetBlockTransactionCountOptions<config, chainId> &
+> = FuncOrVal<
+  UnionEvaluate<
+    GetBlockTransactionCountOptions<config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       GetBlockTransactionCountQueryFnData,
@@ -31,6 +38,7 @@ export type CreateBlockTransactionCountParameters<
       selectData,
       GetBlockTransactionCountQueryKey<config, chainId>
     >
+  >
 >;
 
 export type CreateBlockTransactionCountReturnType<selectData = GetBlockTransactionCountData> =
@@ -43,18 +51,21 @@ export function createBlockTransactionCount<
 >(
   parameters: CreateBlockTransactionCountParameters<config, chainId, selectData> = {},
 ): CreateBlockTransactionCountReturnType<selectData> {
-  const { query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getBlockTransactionCountQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getBlockTransactionCountQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
 
-  const store = createQuery({ ...query, ...options });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options })));
 
   return storeToRune(store);
 }

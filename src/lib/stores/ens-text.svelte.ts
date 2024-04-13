@@ -1,4 +1,12 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { createQuery } from "$lib/query";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetEnsTextErrorType, ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -11,14 +19,13 @@ import {
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
-import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
 
 export type CreateEnsTextParameters<
   config extends Config = Config,
   selectData = GetEnsTextData,
-> = Evaluate<
-  GetEnsTextOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    GetEnsTextOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       GetEnsTextQueryFnData,
@@ -26,6 +33,7 @@ export type CreateEnsTextParameters<
       selectData,
       GetEnsTextQueryKey<config>
     >
+  >
 >;
 
 export type CreateEnsTextReturnType<selectData = GetEnsTextData> = RuneReturnType<
@@ -38,19 +46,22 @@ export function createEnsText<
 >(
   parameters: CreateEnsTextParameters<config, selectData> = {},
 ): CreateEnsTextReturnType<selectData> {
-  const { key, name, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { key, name, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getEnsTextQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
-  const enabled = Boolean(key && name && (query.enabled ?? true));
+  const options = $derived(
+    getEnsTextQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
+  const enabled = $derived(Boolean(key && name && (query.enabled ?? true)));
 
-  const store = createQuery({ ...query, ...options, enabled });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

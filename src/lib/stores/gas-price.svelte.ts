@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import { type QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetGasPriceErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -18,8 +24,9 @@ export type CreateGasPriceParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetGasPriceData,
-> = Evaluate<
-  GetGasPriceOptions<config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    GetGasPriceOptions<config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       GetGasPriceQueryFnData,
@@ -27,6 +34,7 @@ export type CreateGasPriceParameters<
       selectData,
       GetGasPriceQueryKey<config, chainId>
     >
+  >
 >;
 
 export type CreateGasPriceReturnType<selectData = GetGasPriceData> = RuneReturnType<
@@ -40,18 +48,21 @@ export const createGasPrice = <
 >(
   parameters: CreateGasPriceParameters<config, chainId, selectData> = {},
 ): CreateGasPriceReturnType<selectData> => {
-  const { query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getGasPriceQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getGasPriceQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
 
-  const store = createQuery({ ...query, ...options });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options })));
 
   return storeToRune(store);
 };

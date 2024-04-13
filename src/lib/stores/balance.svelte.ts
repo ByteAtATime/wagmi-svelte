@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetBalanceErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -17,8 +23,9 @@ import { createConfig } from "./config.svelte";
 export type CreateBalanceParameters<
   config extends Config = Config,
   selectData = GetBalanceData,
-> = Evaluate<
-  GetBalanceOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    GetBalanceOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       GetBalanceQueryFnData,
@@ -26,6 +33,7 @@ export type CreateBalanceParameters<
       selectData,
       GetBalanceQueryKey<config>
     >
+  >
 >;
 
 export type CreateBalanceReturnType<selectData = GetBalanceData> = RuneReturnType<
@@ -35,19 +43,22 @@ export type CreateBalanceReturnType<selectData = GetBalanceData> = RuneReturnTyp
 export const createBalance = <config extends Config = Config, selectData = GetBalanceData>(
   parameters: CreateBalanceParameters<config, selectData> = {},
 ): CreateBalanceReturnType<selectData> => {
-  const { address, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { address, query = {} } = resolvedParameters;
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getBalanceQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
-  const enabled = Boolean(address && (query.enabled ?? true));
+  const options = $derived(
+    getBalanceQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
+  const enabled = $derived(Boolean(address && (query.enabled ?? true)));
 
-  const store = createQuery({ ...query, ...options, enabled });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 };

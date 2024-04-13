@@ -1,8 +1,10 @@
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import type { ConfigParameter, FuncOrVal, RuneReturnType } from "$lib/types";
 import { watchChainId, type Config, type GetChainIdReturnType, getChainId } from "@wagmi/core";
 import { createConfig } from "./config.svelte";
 
-export type CreateChainIdParameters<config extends Config = Config> = ConfigParameter<config>;
+export type CreateChainIdParameters<config extends Config = Config> = FuncOrVal<
+  ConfigParameter<config>
+>;
 
 export type CreateChainIdReturnType<config extends Config = Config> = RuneReturnType<
   GetChainIdReturnType<config>
@@ -11,7 +13,7 @@ export type CreateChainIdReturnType<config extends Config = Config> = RuneReturn
 export const createChainId = <config extends Config = Config>(
   parameters: CreateChainIdParameters<config> = {},
 ): CreateChainIdReturnType => {
-  const { result: config } = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
   let chainId = $state<GetChainIdReturnType<config>>(getChainId(config));
   let unsubscribe: () => void | undefined;
@@ -25,9 +27,5 @@ export const createChainId = <config extends Config = Config>(
     });
   });
 
-  return {
-    get result() {
-      return chainId;
-    },
-  };
+  return () => chainId;
 };

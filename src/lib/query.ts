@@ -24,11 +24,11 @@ export type CreateMutationParameters<
   context = unknown,
 > =
   CreateMutationOptions<data, error, Evaluate<variables>, context> extends Readable<infer T>
-    ? Readable<Omit<T, "mutationFn" | "mutationKey" | "throwOnError">>
-    : Omit<
-        CreateMutationOptions<data, error, Evaluate<variables>, context>,
-        "mutationFn" | "mutationKey" | "throwOnError"
-      >;
+  ? Readable<Omit<T, "mutationFn" | "mutationKey" | "throwOnError">>
+  : Omit<
+    CreateMutationOptions<data, error, Evaluate<variables>, context>,
+    "mutationFn" | "mutationKey" | "throwOnError"
+  >;
 
 export type CreateMutationReturnType<
   data = unknown,
@@ -108,8 +108,8 @@ export type CreateInfiniteQueryParameters<
   > & {
     // Fix `initialData` type
     initialData?:
-      | CreateInfiniteQueryOptions<queryFnData, error, data, queryKey>["initialData"]
-      | undefined;
+    | CreateInfiniteQueryOptions<queryFnData, error, data, queryKey>["initialData"]
+    | undefined;
   }
 >;
 
@@ -122,9 +122,11 @@ export type CreateInfiniteQueryReturnType<
 
 // Adding some basic customization.
 export function createInfiniteQuery<queryFnData, error, data, queryKey extends QueryKey>(
-  parameters: CreateInfiniteQueryParameters<queryFnData, error, data, queryKey> & {
-    queryKey: QueryKey;
-  },
+  parameters: StoreOrVal<
+    CreateInfiniteQueryParameters<queryFnData, error, data, queryKey> & {
+      queryKey: QueryKey;
+    }
+  >,
 ): CreateInfiniteQueryReturnType<data, error> {
   const result = tanstack_createInfiniteQuery({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

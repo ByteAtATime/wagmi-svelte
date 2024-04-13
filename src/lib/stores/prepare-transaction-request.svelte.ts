@@ -1,8 +1,10 @@
-import type {
-  ConfigParameter,
-  QueryParameter,
-  RuneReturnType,
-  RuneReturnTypeToStore,
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+  type RuneReturnTypeToStore,
 } from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import {
@@ -21,26 +23,28 @@ import { type PrepareTransactionRequestParameterType as viem_PrepareTransactionR
 import { createChainId } from "./chain-id.svelte";
 import { createConfig } from "./config.svelte";
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreatePrepareTransactionRequestParameters<
   parameterType extends
-    viem_PrepareTransactionRequestParameterType = viem_PrepareTransactionRequestParameterType,
+  viem_PrepareTransactionRequestParameterType = viem_PrepareTransactionRequestParameterType,
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | undefined = undefined,
   selectData = PrepareTransactionRequestData<parameterType, config, chainId>,
-> = PrepareTransactionRequestOptions<parameterType, config, chainId> &
+> = FuncOrVal<
+  PrepareTransactionRequestOptions<parameterType, config, chainId> &
   ConfigParameter<config> &
   QueryParameter<
     PrepareTransactionRequestQueryFnData<parameterType, config, chainId>,
     PrepareTransactionRequestErrorType,
     selectData,
     PrepareTransactionRequestQueryKey<parameterType, config, chainId>
-  >;
+  >
+>;
 
 export type CreatePrepareTransactionRequestReturnType<
   parameterType extends
-    viem_PrepareTransactionRequestParameterType = viem_PrepareTransactionRequestParameterType,
+  viem_PrepareTransactionRequestParameterType = viem_PrepareTransactionRequestParameterType,
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | undefined = undefined,
   selectData = PrepareTransactionRequestData<parameterType, config, chainId>,
@@ -59,23 +63,28 @@ export function createPrepareTransactionRequest<
     selectData
   > = {} as any,
 ): CreatePrepareTransactionRequestReturnType<parameterType, config, chainId, selectData> {
-  const { to, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { to, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = prepareTransactionRequestQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    prepareTransactionRequestQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = Boolean(to && (query.enabled ?? true));
 
-  const store = createQuery({
-    ...(query as any),
-    ...options,
-    enabled,
-  }) as RuneReturnTypeToStore<
+  const store = createQuery(
+    runeToStore(() => ({
+      ...(query as any),
+      ...options,
+      enabled,
+    })),
+  ) as RuneReturnTypeToStore<
     CreatePrepareTransactionRequestReturnType<parameterType, config, chainId, selectData>
   >;
 

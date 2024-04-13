@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type RuneReturnType, type FuncOrVal } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import type { Config, ResolvedRegister, SendTransactionErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -16,17 +16,19 @@ import { storeToRune } from "$lib/runes.svelte";
 export type UseSendTransactionParameters<
   config extends Config = Config,
   context = unknown,
-> = Evaluate<
-  ConfigParameter<config> & {
-    mutation?:
+> = FuncOrVal<
+  Evaluate<
+    ConfigParameter<config> & {
+      mutation?:
       | CreateMutationParameters<
-          SendTransactionData,
-          SendTransactionErrorType,
-          SendTransactionVariables<config, config["chains"][number]["id"]>,
-          context
-        >
+        SendTransactionData,
+        SendTransactionErrorType,
+        SendTransactionVariables<config, config["chains"][number]["id"]>,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateSendTransactionReturnType<
@@ -52,26 +54,29 @@ export function createSendTransaction<
 >(
   parameters: UseSendTransactionParameters<config, context> = {},
 ): CreateSendTransactionReturnType<config, context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  const mutationOptions = sendTransactionMutationOptions(config.result);
-  const store = createMutation({
+  const mutationOptions = $derived(sendTransactionMutationOptions(config));
+  const store = createMutation<
+    SendTransactionData,
+    SendTransactionErrorType,
+    SendTransactionVariables<config, config["chains"][number]["id"]>,
+    context
+  >({
     ...mutation,
     ...mutationOptions,
   });
 
-  const mutateResult = storeToRune(store);
+  const mutateResult = $derived.by(storeToRune(store));
 
-  type Return = CreateSendTransactionReturnType<config, context>["result"];
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        sendTransaction: mutateResult.result.mutate as Return["sendTransaction"],
-        sendTransactionAsync: mutateResult.result.mutateAsync as Return["sendTransactionAsync"],
-      };
-    },
-  };
+  type Return = ReturnType<CreateSendTransactionReturnType<config, context>>;
+  return () => ({
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    sendTransaction: mutateResult.mutate as Return["sendTransaction"],
+    sendTransactionAsync: mutateResult.mutateAsync as Return["sendTransactionAsync"],
+  });
 }

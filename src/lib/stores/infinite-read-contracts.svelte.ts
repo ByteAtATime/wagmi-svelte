@@ -1,4 +1,11 @@
-import type { ConfigParameter, InfiniteQueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type InfiniteQueryParameter,
+  type RuneReturnType,
+  type ParamType,
+} from "$lib/types";
 import type { InfiniteQueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, ReadContractsErrorType, ResolvedRegister } from "@wagmi/core";
 import {
@@ -16,7 +23,7 @@ import {
   structuralSharing,
   type CreateInfiniteQueryParameters,
 } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreateInfiniteContractReadsParameters<
   contracts extends readonly unknown[] = readonly ContractFunctionParameters[],
@@ -24,7 +31,8 @@ export type CreateInfiniteContractReadsParameters<
   config extends Config = Config,
   pageParam = unknown,
   selectData = InfiniteReadContractsData<contracts, allowFailure>,
-> = InfiniteReadContractsOptions<contracts, allowFailure, pageParam, config> &
+> = FuncOrVal<
+  InfiniteReadContractsOptions<contracts, allowFailure, pageParam, config> &
   ConfigParameter<config> &
   InfiniteQueryParameter<
     InfiniteReadContractsQueryFnData<contracts, allowFailure>,
@@ -33,7 +41,8 @@ export type CreateInfiniteContractReadsParameters<
     InfiniteReadContractsData<contracts, allowFailure>,
     InfiniteReadContractsQueryKey<contracts, allowFailure, pageParam, config>,
     pageParam
-  >;
+  >
+>;
 
 export type CreateInfiniteContractReadsReturnType<
   contracts extends readonly unknown[] = readonly ContractFunctionParameters[],
@@ -56,29 +65,34 @@ export function createInfiniteReadContracts<
     selectData
   >,
 ): CreateInfiniteContractReadsReturnType<contracts, allowFailure, selectData> {
-  const { contracts = [], query } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { contracts = [], query } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = createChainId();
+  const config = $derived.by(createConfig(parameters));
+  const chainId = $derived.by(createChainId());
 
-  const options = infiniteReadContractsQueryOptions(config.result, {
-    ...parameters,
-    chainId: chainId.result,
-    contracts: contracts as CreateInfiniteContractReadsParameters["contracts"],
-    query: query as CreateInfiniteQueryParameters,
-  });
+  const options = $derived(
+    infiniteReadContractsQueryOptions(config, {
+      ...resolvedParameters,
+      chainId: chainId,
+      contracts: contracts as ParamType<CreateInfiniteContractReadsParameters>["contracts"],
+      query: query as CreateInfiniteQueryParameters,
+    }),
+  );
 
   const store = createInfiniteQuery<
     InfiniteReadContractsQueryFnData<contracts, allowFailure>,
     ReadContractsErrorType,
     selectData,
     InfiniteReadContractsQueryKey<contracts, allowFailure, pageParam, config>
-  >({
-    ...(query as any),
-    ...options,
-    initialPageParam: options.initialPageParam,
-    structuralSharing: query.structuralSharing ?? structuralSharing,
-  });
+  >(
+    runeToStore(() => ({
+      ...(query as any),
+      ...options,
+      initialPageParam: options.initialPageParam,
+      structuralSharing: query.structuralSharing ?? structuralSharing,
+    })),
+  );
 
   return storeToRune(store);
 }

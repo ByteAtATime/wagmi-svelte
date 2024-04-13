@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import type { SignTypedDataErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -11,19 +11,21 @@ import {
   signTypedDataMutationOptions,
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
-export type CreateSignTypedDataParameters<context = unknown> = Evaluate<
-  ConfigParameter & {
-    mutation?:
+export type CreateSignTypedDataParameters<context = unknown> = FuncOrVal<
+  Evaluate<
+    ConfigParameter & {
+      mutation?:
       | CreateMutationParameters<
-          SignTypedDataData,
-          SignTypedDataErrorType,
-          SignTypedDataVariables,
-          context
-        >
+        SignTypedDataData,
+        SignTypedDataErrorType,
+        SignTypedDataVariables,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateSignTypedDataReturnType<context = unknown> = RuneReturnType<
@@ -43,31 +45,31 @@ export type CreateSignTypedDataReturnType<context = unknown> = RuneReturnType<
 export function createSignTypedData<context = unknown>(
   parameters: CreateSignTypedDataParameters<context> = {},
 ): CreateSignTypedDataReturnType<context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  const mutationOptions = signTypedDataMutationOptions(config.result);
+  const mutationOptions = $derived(signTypedDataMutationOptions(config));
   const store = createMutation<
     SignTypedDataData,
     SignTypedDataErrorType,
     SignTypedDataVariables,
     context
-  >({
-    ...mutation,
-    ...mutationOptions,
+  >(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
+
+  const mutateResult = $derived.by(storeToRune(store));
+
+  type Return = ReturnType<CreateSignTypedDataReturnType<context>>;
+  return () => ({
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    signTypedData: mutateResult.mutate as Return["signTypedData"],
+    signTypedDataAsync: mutateResult.mutateAsync as Return["signTypedDataAsync"],
   });
-
-  const mutateResult = storeToRune(store);
-
-  type Return = CreateSignTypedDataReturnType<context>["result"];
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        signTypedData: mutateResult.result.mutate as Return["signTypedData"],
-        signTypedDataAsync: mutateResult.result.mutateAsync as Return["signTypedDataAsync"],
-      };
-    },
-  };
 }

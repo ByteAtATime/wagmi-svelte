@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import type { Config, ResolvedRegister, WriteContractErrorType } from "@wagmi/core";
 import {
@@ -11,27 +11,29 @@ import {
 } from "@wagmi/core/query";
 import type { Abi } from "viem";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreateWriteContractParameters<
   config extends Config = Config,
   context = unknown,
-> = ConfigParameter<config> & {
-  mutation?:
+> = FuncOrVal<
+  ConfigParameter<config> & {
+    mutation?:
     | CreateMutationParameters<
-        WriteContractData,
-        WriteContractErrorType,
-        WriteContractVariables<
-          Abi,
-          string,
-          readonly unknown[],
-          config,
-          config["chains"][number]["id"]
-        >,
-        context
-      >
+      WriteContractData,
+      WriteContractErrorType,
+      WriteContractVariables<
+        Abi,
+        string,
+        readonly unknown[],
+        config,
+        config["chains"][number]["id"]
+      >,
+      context
+    >
     | undefined;
-};
+  }
+>;
 
 export type CreateWriteContractReturnType<
   config extends Config = Config,
@@ -54,25 +56,31 @@ export function createWriteContract<
 >(
   parameters: CreateWriteContractParameters<config, context> = {},
 ): CreateWriteContractReturnType<config, context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  const mutationOptions = writeContractMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
+  const mutationOptions = $derived(writeContractMutationOptions(config));
+  const store = createMutation<
+    WriteContractData,
+    WriteContractErrorType,
+    WriteContractVariables<Abi, string, readonly unknown[], config, config["chains"][number]["id"]>,
+    context
+  >(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
+
+  const mutateResult = $derived.by(storeToRune(store));
+
+  type Return = ReturnType<CreateWriteContractReturnType<config, context>>;
+  return () => ({
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    writeContract: mutateResult.mutate as Return["writeContract"],
+    writeContractAsync: mutateResult.mutateAsync as Return["writeContractAsync"],
   });
-
-  const mutateResult = storeToRune(store);
-
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        writeContract: mutateResult.result.mutate,
-        writeContractAsync: mutateResult.result.mutateAsync,
-      };
-    },
-  };
 }

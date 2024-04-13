@@ -1,6 +1,12 @@
 import { createQuery, structuralSharing } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type ReadContractsErrorType, type ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -20,8 +26,9 @@ export type CreateReadContractsParameters<
   allowFailure extends boolean = true,
   config extends Config = Config,
   selectData = ReadContractsData<contracts, allowFailure>,
-> = Evaluate<
-  ReadContractsOptions<contracts, allowFailure, config> &
+> = FuncOrVal<
+  Evaluate<
+    ReadContractsOptions<contracts, allowFailure, config> &
     ConfigParameter<config> &
     QueryParameter<
       ReadContractsQueryFnData<contracts, allowFailure>,
@@ -29,6 +36,7 @@ export type CreateReadContractsParameters<
       selectData,
       ReadContractsQueryKey<contracts, allowFailure, config>
     >
+  >
 >;
 
 export type CreateReadContractsReturnType<
@@ -45,14 +53,17 @@ export function createReadContracts<
 >(
   parameters: CreateReadContractsParameters<contracts, allowFailure, config, selectData> = {},
 ): CreateReadContractsReturnType<contracts, allowFailure, selectData> {
-  const { contracts = [], query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { contracts = [], query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = createChainId();
+  const config = $derived.by(createConfig(parameters));
+  const chainId = $derived.by(createChainId());
 
-  const options = readContractsQueryOptions<config, contracts, allowFailure>(
-    config.result as config,
-    { ...parameters, chainId: chainId.result },
+  const options = $derived(
+    readContractsQueryOptions<config, contracts, allowFailure>(config as config, {
+      ...resolvedParameters,
+      chainId,
+    }),
   );
 
   const enabled = $derived.by(() => {
@@ -68,12 +79,14 @@ export function createReadContracts<
     return Boolean(isContractsValid && (query.enabled ?? true));
   });
 
-  const store = createQuery({
-    ...options,
-    ...query,
-    enabled,
-    structuralSharing: query.structuralSharing ?? structuralSharing,
-  });
+  const store = createQuery(
+    runeToStore(() => ({
+      ...options,
+      ...query,
+      enabled,
+      structuralSharing: query.structuralSharing ?? structuralSharing,
+    })),
+  );
 
   return storeToRune(store);
 }

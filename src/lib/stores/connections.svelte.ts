@@ -1,31 +1,27 @@
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { type GetConnectionsReturnType, getConnections, watchConnections } from "@wagmi/core";
 import { createConfig } from "./config.svelte";
 
-export type CreateConnectionsParameters = ConfigParameter;
+export type CreateConnectionsParameters = FuncOrVal<ConfigParameter>;
 
 export type CreateConnectionsReturnType = RuneReturnType<GetConnectionsReturnType>;
 
 export function createConnections(
   parameters: CreateConnectionsParameters = {},
 ): CreateConnectionsReturnType {
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  let connections = $state(getConnections(config.result));
+  let connections = $state(getConnections(config));
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
     unsubscribe?.();
-    unsubscribe = watchConnections(config.result, {
+    unsubscribe = watchConnections(config, {
       onChange: (newConnections) => {
         connections = newConnections;
       },
     });
   });
 
-  return {
-    get result() {
-      return connections;
-    },
-  };
+  return () => connections;
 }

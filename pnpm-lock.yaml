@@ -77,8 +77,8 @@ devDependencies:
     specifier: ^0.2.7
     version: 0.2.7
   svelte-check:
-    specifier: ^3.6.4
-    version: 3.6.4(@babel/core@7.24.4)(postcss@8.4.35)(svelte@5.0.0-next.96)
+    specifier: ^3.6.9
+    version: 3.6.9(@babel/core@7.24.4)(postcss@8.4.35)(svelte@5.0.0-next.96)
   tailwindcss:
     specifier: ^3.4.1
     version: 3.4.1
@@ -8776,13 +8776,13 @@ packages:
     resolution: {integrity: sha512-ot0WnXS9fgdkgIcePe6RHNk1WA8+muPa6cSjeR3V8K27q9BB1rTE3R1p7Hv0z1ZyAc8s6Vvv8DIyWf681MAt0w==}
     engines: {node: '>= 0.4'}
 
-  /svelte-check@3.6.4(@babel/core@7.24.4)(postcss@8.4.35)(svelte@5.0.0-next.96):
-    resolution: {integrity: sha512-mY/dqucqm46p72M8yZmn81WPZx9mN6uuw8UVfR3ZKQeLxQg5HDGO3HHm5AZuWZPYNMLJ+TRMn+TeN53HfQ/vsw==}
+  /svelte-check@3.6.9(@babel/core@7.24.4)(postcss@8.4.35)(svelte@5.0.0-next.96):
+    resolution: {integrity: sha512-hDQrk3L0osX07djQyMiXocKysTLfusqi8AriNcCiQxhQR49/LonYolcUGMtZ0fbUR8HTR198Prrgf52WWU9wEg==}
     hasBin: true
     peerDependencies:
       svelte: ^3.55.0 || ^4.0.0-next.0 || ^4.0.0 || ^5.0.0-next.0
     dependencies:
-      '@jridgewell/trace-mapping': 0.3.23
+      '@jridgewell/trace-mapping': 0.3.25
       chokidar: 3.6.0
       fast-glob: 3.3.2
       import-fresh: 3.3.0
@@ -8870,7 +8870,7 @@ packages:
       '@babel/core': 7.24.4
       '@types/pug': 2.0.10
       detect-indent: 6.1.0
-      magic-string: 0.30.7
+      magic-string: 0.30.9
       postcss: 8.4.35
       sorcery: 0.11.0
       strip-indent: 3.0.0

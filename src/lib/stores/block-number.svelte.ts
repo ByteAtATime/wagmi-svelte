@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import { useQueryClient, type QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type GetBlockNumberErrorType, type ResolvedRegister } from "@wagmi/core";
 import { type Evaluate, type UnionEvaluate, type UnionOmit } from "@wagmi/core/internal";
@@ -22,8 +28,9 @@ export type CreateBlockNumberParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetBlockNumberData,
-> = Evaluate<
-  GetBlockNumberOptions<config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    GetBlockNumberOptions<config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       GetBlockNumberQueryFnData,
@@ -32,15 +39,16 @@ export type CreateBlockNumberParameters<
       GetBlockNumberQueryKey<config, chainId>
     > & {
       watch?:
-        | boolean
-        | UnionEvaluate<
-            UnionOmit<
-              CreateWatchBlockNumberParameters<config, chainId>,
-              "chainId" | "config" | "onBlockNumber" | "onError"
-            >
-          >
-        | undefined;
+      | boolean
+      | UnionEvaluate<
+        UnionOmit<
+          CreateWatchBlockNumberParameters<config, chainId>,
+          "chainId" | "config" | "onBlockNumber" | "onError"
+        >
+      >
+      | undefined;
     }
+  >
 >;
 
 export type CreateBlockNumberReturnType<selectData = GetBlockNumberData> = RuneReturnType<
@@ -54,22 +62,25 @@ export function createBlockNumber<
 >(
   parameters: CreateBlockNumberParameters<config, chainId, selectData> = {},
 ): CreateBlockNumberReturnType<selectData> {
-  const { query = {}, watch } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {}, watch } = resolvedParameters;
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
   const queryClient = useQueryClient();
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const configChainId = $derived.by(createChainId());
+  const chainId = resolvedParameters.chainId ?? configChainId;
 
-  const options = getBlockNumberQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getBlockNumberQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
 
   createWatchBlockNumber({
     ...({
-      config: parameters.config,
-      chainId: parameters.chainId,
+      config: resolvedParameters.config,
+      chainId: resolvedParameters.chainId,
       ...(typeof watch === "object" ? watch : {}),
     } as CreateWatchBlockNumberParameters),
     enabled: Boolean(
@@ -80,7 +91,7 @@ export function createBlockNumber<
     },
   });
 
-  const store = createQuery({ ...query, ...options });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options })));
 
   return storeToRune(store);
 }

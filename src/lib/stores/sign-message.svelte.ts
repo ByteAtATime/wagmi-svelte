@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import { type SignMessageErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -11,19 +11,21 @@ import {
   signMessageMutationOptions,
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
-export type CreateSignMessageParameters<context = unknown> = Evaluate<
-  ConfigParameter & {
-    mutation?:
+export type CreateSignMessageParameters<context = unknown> = FuncOrVal<
+  Evaluate<
+    ConfigParameter & {
+      mutation?:
       | CreateMutationParameters<
-          SignMessageData,
-          SignMessageErrorType,
-          SignMessageVariables,
-          context
-        >
+        SignMessageData,
+        SignMessageErrorType,
+        SignMessageVariables,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateSignMessageReturnType<context = unknown> = RuneReturnType<
@@ -38,25 +40,31 @@ export type CreateSignMessageReturnType<context = unknown> = RuneReturnType<
 export function createSignMessage<context = unknown>(
   parameters: CreateSignMessageParameters<context> = {},
 ): CreateSignMessageReturnType<context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  const mutationOptions = signMessageMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
+  const mutationOptions = $derived(signMessageMutationOptions(config));
+  const store = createMutation<
+    SignMessageData,
+    SignMessageErrorType,
+    SignMessageVariables,
+    context
+  >(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
+
+  const mutateResult = $derived.by(storeToRune(store));
+
+  type Return = ReturnType<CreateSignMessageReturnType<context>>;
+  return () => ({
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    signMessage: mutateResult.mutate as Return["signMessage"],
+    signMessageAsync: mutateResult.mutateAsync as Return["signMessageAsync"],
   });
-
-  const mutateResult = storeToRune(store);
-
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        signMessage: mutateResult.result.mutate,
-        signMessageAsync: mutateResult.result.mutateAsync,
-      };
-    },
-  };
 }

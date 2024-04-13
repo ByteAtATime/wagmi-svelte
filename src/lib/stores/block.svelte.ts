@@ -1,10 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type {
-  ConfigParameter,
-  QueryParameter,
-  RuneReturnType,
-  RuneReturnTypeToStore,
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+  type RuneReturnTypeToStore,
 } from "$lib/types";
 import { useQueryClient, type QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type GetBlockErrorType, type ResolvedRegister } from "@wagmi/core";
@@ -27,8 +29,9 @@ export type CreateBlockParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetBlockData<includeTransactions, blockTag, config, chainId>,
-> = Evaluate<
-  GetBlockOptions<includeTransactions, blockTag, config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    GetBlockOptions<includeTransactions, blockTag, config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       GetBlockQueryFnData<includeTransactions, blockTag, config, chainId>,
@@ -37,15 +40,16 @@ export type CreateBlockParameters<
       GetBlockQueryKey<includeTransactions, blockTag, config, chainId>
     > & {
       watch?:
-        | boolean
-        | UnionEvaluate<
-            UnionOmit<
-              CreateWatchBlocksParameters<includeTransactions, blockTag, config, chainId>,
-              "chainId" | "config" | "onBlock" | "onError"
-            >
-          >
-        | undefined;
+      | boolean
+      | UnionEvaluate<
+        UnionOmit<
+          CreateWatchBlocksParameters<includeTransactions, blockTag, config, chainId>,
+          "chainId" | "config" | "onBlock" | "onError"
+        >
+      >
+      | undefined;
     }
+  >
 >;
 
 export type CreateBlockReturnType<
@@ -71,35 +75,40 @@ export function createBlock<
     selectData
   > = {},
 ): CreateBlockReturnType<includeTransactions, blockTag, config, chainId, selectData> {
-  const { query = {}, watch } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {}, watch } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
   const queryClient = useQueryClient();
-  const configChainId = createChainId();
+  const configChainId = $derived.by(createChainId());
 
-  const options = getBlockQueryOptions(config.result, {
-    ...parameters,
-    chainId: parameters.chainId ?? configChainId.result,
-  });
-  const enabled = Boolean(query.enabled ?? true);
+  const options = $derived(
+    getBlockQueryOptions(config, {
+      ...resolvedParameters,
+      chainId: resolvedParameters.chainId ?? configChainId,
+    }),
+  );
+  const enabled = $derived(Boolean(query.enabled ?? true));
 
-  createWatchBlocks({
+  createWatchBlocks(() => ({
     ...({
-      config: parameters.config,
-      chainId: parameters.chainId!,
+      config: resolvedParameters.config,
+      chainId: resolvedParameters.chainId!,
       ...(typeof watch === "object" ? watch : {}),
     } as CreateWatchBlocksParameters),
     enabled: Boolean(enabled && (typeof watch === "object" ? watch.enabled : watch)),
     onBlock(block) {
-      queryClient.setQueryData(options.queryKey, block);
+      queryClient.setQueryData(options, block);
     },
-  });
+  }));
 
-  const store = createQuery({
-    ...query,
-    ...options,
-    enabled,
-  }) as RuneReturnTypeToStore<
+  const store = createQuery(
+    runeToStore(() => ({
+      ...query,
+      ...options,
+      enabled,
+    })),
+  ) as RuneReturnTypeToStore<
     CreateBlockReturnType<includeTransactions, blockTag, config, chainId, selectData>
   >;
 

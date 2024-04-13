@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, ResolvedRegister, VerifyTypedDataErrorType } from "@wagmi/core";
 import {
@@ -20,14 +26,16 @@ export type CreateVerifyTypedDataParameters<
   primaryType extends keyof typedData | "EIP712Domain" = keyof typedData,
   config extends Config = Config,
   selectData = VerifyTypedDataData,
-> = VerifyTypedDataOptions<typedData, primaryType, config> &
+> = FuncOrVal<
+  VerifyTypedDataOptions<typedData, primaryType, config> &
   ConfigParameter<config> &
   QueryParameter<
     VerifyTypedDataQueryFnData,
     VerifyTypedDataErrorType,
     selectData,
     VerifyTypedDataQueryKey<typedData, primaryType, config>
-  >;
+  >
+>;
 
 export type CreateVerifyTypedDataReturnType<selectData = VerifyTypedDataData> = RuneReturnType<
   QueryObserverResult<selectData, VerifyTypedDataErrorType>
@@ -46,34 +54,31 @@ export function createVerifyTypedData<
     selectData
   > = {} as any,
 ): CreateVerifyTypedDataReturnType<selectData> {
-  const { address, message, primaryType, signature, types, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const {
+    address,
+    message,
+    primaryType,
+    signature,
+    types,
+    query = {},
+  } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = parameters.chainId ?? createChainId().result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = verifyTypedDataQueryOptions<config, typedData, primaryType>(
-    config.result as config,
-    {
-      ...parameters,
+  const options = $derived(
+    verifyTypedDataQueryOptions<config, typedData, primaryType>(config as config, {
+      ...resolvedParameters,
       chainId,
-    },
+    }),
   );
   const enabled = $derived(
     Boolean(address && message && primaryType && signature && types && (query.enabled ?? true)),
   );
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

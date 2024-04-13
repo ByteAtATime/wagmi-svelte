@@ -8,18 +8,14 @@ export const storeToRune = <T>(store: Readable<T>): RuneReturnType<T> => {
     result = $store;
   });
 
-  return {
-    get result() {
-      return result;
-    },
-  };
+  return () => result;
 };
 
 export const runeToStore = <T>(rune: RuneReturnType<T>): Readable<T> => {
-  const store = writable(rune.result);
+  const store = writable(rune());
 
   $effect(() => {
-    store.set(rune.result);
+    store.set(rune());
   });
 
   return store;

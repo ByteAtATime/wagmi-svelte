@@ -1,4 +1,9 @@
-import type { ConfigParameter, EnabledParameter } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type EnabledParameter,
+  type FuncOrVal,
+} from "$lib/types";
 import {
   type Config,
   type ResolvedRegister,
@@ -12,10 +17,12 @@ import { createChainId } from "./chain-id.svelte";
 export type CreateWatchPendingTransactionsParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
-> = UnionEvaluate<
-  UnionPartial<WatchPendingTransactionsParameters<config, chainId>> &
+> = FuncOrVal<
+  UnionEvaluate<
+    UnionPartial<WatchPendingTransactionsParameters<config, chainId>> &
     ConfigParameter<config> &
     EnabledParameter
+  >
 >;
 
 export type CreateWatchPendingTransactionsReturnType = void;
@@ -26,11 +33,12 @@ export function createWatchPendingTransactions<
 >(
   parameters: CreateWatchPendingTransactionsParameters<config, chainId> = {} as any,
 ): CreateWatchPendingTransactionsReturnType {
-  const { enabled = true, onTransactions, ...rest } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { enabled = true, onTransactions, ...rest } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
@@ -38,7 +46,7 @@ export function createWatchPendingTransactions<
     if (!onTransactions) return;
 
     unsubscribe?.();
-    unsubscribe = watchPendingTransactions(config.result, {
+    unsubscribe = watchPendingTransactions(config, {
       ...(rest as any),
       chainId,
       onTransactions,

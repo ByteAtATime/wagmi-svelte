@@ -1,4 +1,4 @@
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import {
   type Config,
   type GetPublicClientParameters,
@@ -13,7 +13,7 @@ import { createConfig } from "./config.svelte";
 export type CreatePublicClientParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | number = config["chains"][number]["id"],
-> = Evaluate<GetPublicClientParameters<config, chainId> & ConfigParameter<config>>;
+> = FuncOrVal<Evaluate<GetPublicClientParameters<config, chainId> & ConfigParameter<config>>>;
 
 export type CreatePublicClientReturnType<
   config extends Config = Config,
@@ -26,23 +26,21 @@ export function createPublicClient<
 >(
   parameters: CreatePublicClientParameters<config, chainId> = {},
 ): CreatePublicClientReturnType<config, chainId> {
-  const config = createConfig(parameters);
+  const resolvedParameters = $derived(resolveVal(parameters));
 
-  let publicClient = $state(getPublicClient<config, chainId>(config.result as config, parameters));
+  const config = $derived.by(createConfig(parameters));
+
+  let publicClient = $state(getPublicClient<config, chainId>(config as config, resolvedParameters));
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
     unsubscribe?.();
-    unsubscribe = watchPublicClient<config, chainId>(config.result as config, {
+    unsubscribe = watchPublicClient<config, chainId>(config as config, {
       onChange(newPublicClient) {
         publicClient = newPublicClient;
       },
     });
   });
 
-  return {
-    get result() {
-      return publicClient;
-    },
-  };
+  return () => publicClient;
 }

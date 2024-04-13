@@ -15,7 +15,7 @@ However, because Svelte is not React<sup>[citation needed]</sup>, there will ine
 - Stores are prefixed with `create-` instead of `use-` (e.g. `createAccount` instead of `useAccount`, `createChainId` instead of `useChainId`, etc.)
   - While this may cause some confusion (`createConfig` sounds like it's, well, creating a config), this library uses this naming convention very consistently.
   - Any re-exported methods from `@wagmi/core` starting with `create-` have now been renamed to `createWagmi-` (e.g. `createWagmiConfig` instead of `createConfig`) to avoid naming conflicts
-- To maintain reactivity, we now return a getter named `result` instead of the values themselves. More on this in the next section.
+- To maintain reactivity, we now return a function that returns the value instead of the value itself. More on this in the next section.
 
 ### Reactivity
 
@@ -25,38 +25,10 @@ If you're coming from React, you are probably used to using hooks like this:
 const { address, chainId, status } = useAccount();
 ```
 
-However, in Svelte, [runes](https://svelte-5-preview.vercel.app/docs/runes) containing primitive values cannot be directly returned and also stay reactive. As a workaround, we have to return a getter method named `result` that returns the value. For example:
+However, in Svelte, [runes](https://svelte-5-preview.vercel.app/docs/runes) containing primitive values cannot be directly returned and also stay reactive. As a workaround, we return a function, which you can access through `$derived.by`. For example:
 
 ```ts
-return {
-  get result() {
-    return chainId;
-  },
-};
-```
-
-_No problem_, you say. _I'll just nest my destructuring statements!_
-
-However, the following code **does not work**:
-
-```ts
-const {
-  result: { address, chainId, status },
-} = createAccount(); // createAccount is the Svelte version of useAccount
-```
-
-This statement is very deceptive: if you destructure a getter, TypeScript only calls it once. Therefore, it may work, but somewhere down the line you'll be very confused as to why your program is not updating.
-
-Instead, do this:
-
-```ts
-const account = createAccount();
-
-// either grab whatever you need directly, at the location you need to use it...
-const balance = createBalance({ address: account.result.address });
-
-// ...or create a derived rune for it
-const address = $derived(account.result.address);
+const { address, chainId, status } = $derived.by(createAccount()); // createAccount is the Svelte version of useAccount
 ```
 
 <Info>While Svelte automatically generates a proxy for objects, we still return all values in this format for consistency.</Info>

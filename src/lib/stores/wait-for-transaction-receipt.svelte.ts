@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, ResolvedRegister, WaitForTransactionReceiptErrorType } from "@wagmi/core";
 import {
@@ -19,8 +25,9 @@ export type CreateWaitForTransactionReceiptParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = WaitForTransactionReceiptData<config, chainId>,
-> = Evaluate<
-  WaitForTransactionReceiptOptions<config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    WaitForTransactionReceiptOptions<config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       WaitForTransactionReceiptQueryFnData<config, chainId>,
@@ -28,6 +35,7 @@ export type CreateWaitForTransactionReceiptParameters<
       selectData,
       WaitForTransactionReceiptQueryKey<config, chainId>
     >
+  >
 >;
 
 export type CreateWaitForTransactionReceiptReturnType<
@@ -42,30 +50,28 @@ export function createWaitForTransactionReceipt<
   selectData = WaitForTransactionReceiptData<config, chainId>,
 >(
   parameters: CreateWaitForTransactionReceiptParameters<config, chainId, selectData> = {},
-): CreateWaitForTransactionReceiptReturnType {
-  const { hash, query = {} } = parameters;
+): CreateWaitForTransactionReceiptReturnType<config, chainId, selectData> {
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { hash, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = parameters.chainId ?? createChainId().result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = waitForTransactionReceiptQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    waitForTransactionReceiptQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = $derived(Boolean(hash && (query.enabled ?? true)));
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...(query as any), ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery<
+    WaitForTransactionReceiptQueryFnData<config, chainId>,
+    WaitForTransactionReceiptErrorType,
+    selectData,
+    WaitForTransactionReceiptQueryKey<config, chainId>
+  >(runeToStore(() => ({ ...(query as any), ...options, enabled })));
 
   return storeToRune(store);
 }

@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import {
   type Config,
@@ -16,23 +16,25 @@ import {
   switchChainMutationOptions,
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 import { createChains } from "./chains.svelte";
 
 export type CreateSwitchChainParameters<
   config extends Config = Config,
   context = unknown,
-> = Evaluate<
-  ConfigParameter<config> & {
-    mutation?:
+> = FuncOrVal<
+  Evaluate<
+    ConfigParameter<config> & {
+      mutation?:
       | CreateMutationParameters<
-          SwitchChainData<config, config["chains"][number]["id"]>,
-          SwitchChainErrorType,
-          SwitchChainVariables<config, config["chains"][number]["id"]>,
-          context
-        >
+        SwitchChainData<config, config["chains"][number]["id"]>,
+        SwitchChainErrorType,
+        SwitchChainVariables<config, config["chains"][number]["id"]>,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateSwitchChainReturnType<
@@ -59,28 +61,33 @@ export function createSwitchChain<
 >(
   parameters: CreateSwitchChainParameters<config, context> = {},
 ): CreateSwitchChainReturnType<config, context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chains = createChains({ config: config.result });
+  const config = $derived.by(createConfig(parameters));
+  const chains = $derived.by(createChains({ config }));
 
-  const mutationOptions = switchChainMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
+  const mutationOptions = $derived(switchChainMutationOptions<config>(config as config));
+  const store = createMutation<
+    SwitchChainData<config, config["chains"][number]["id"]>,
+    SwitchChainErrorType,
+    SwitchChainVariables<config, config["chains"][number]["id"]>,
+    context
+  >(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
+
+  const mutateResult = $derived.by(storeToRune(store));
+
+  type Return = ReturnType<CreateSwitchChainReturnType<config, context>>;
+  return () => ({
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    chains: chains,
+    switchChain: mutateResult.mutate as Return["switchChain"],
+    switchChainAsync: mutateResult.mutateAsync as Return["switchChainAsync"],
   });
-
-  const mutateResult = storeToRune(store);
-
-  type Return = CreateSwitchChainReturnType<config, context>["result"];
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        chains: chains.result,
-        switchChain: mutateResult.result.mutate,
-        switchChainAsync: mutateResult.result.mutateAsync as Return["switchChainAsync"],
-      };
-    },
-  };
 }

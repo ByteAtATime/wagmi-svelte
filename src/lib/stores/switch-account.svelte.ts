@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import type { Config, Connector, ResolvedRegister, SwitchAccountErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -17,17 +17,19 @@ import { createConnections } from "./connections.svelte";
 export type CreateSwitchAccountParameters<
   config extends Config = Config,
   context = unknown,
-> = Evaluate<
-  ConfigParameter<config> & {
-    mutation?:
+> = FuncOrVal<
+  Evaluate<
+    ConfigParameter<config> & {
+      mutation?:
       | CreateMutationParameters<
-          SwitchAccountData<config>,
-          SwitchAccountErrorType,
-          SwitchAccountVariables,
-          context
-        >
+        SwitchAccountData<config>,
+        SwitchAccountErrorType,
+        SwitchAccountVariables,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateSwitchAccountReturnType<
@@ -54,27 +56,31 @@ export function createSwitchAccount<
 >(
   parameters: CreateSwitchAccountParameters<config, context> = {},
 ): CreateSwitchAccountReturnType<config, context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const connections = createConnections({ config: config.result });
+  const config = $derived.by(createConfig(parameters));
+  const connections = $derived.by(createConnections(() => ({ config })));
 
-  const mutationOptions = switchAccountMutationOptions(config.result);
-  const store = createMutation({
+  const mutationOptions = $derived(switchAccountMutationOptions(config));
+  const store = createMutation<
+    SwitchAccountData<config>,
+    SwitchAccountErrorType,
+    SwitchAccountVariables,
+    context
+  >({
     ...mutation,
     ...mutationOptions,
   });
 
-  const mutateResult = storeToRune(store);
+  const mutateResult = $derived.by(storeToRune(store));
 
-  return {
-    get result() {
-      return {
-        ...mutateResult.result,
-        connectors: connections.result.map((connection) => connection.connector),
-        switchAccount: mutateResult.result.mutate,
-        switchAccountAsync: mutateResult.result.mutateAsync,
-      };
-    },
-  };
+  type Return = ReturnType<CreateSwitchAccountReturnType<config, context>>;
+  return () => ({
+    ...mutateResult,
+    connectors: connections.map((connection) => connection.connector),
+    mutate: mutateResult.mutate as Return["mutate"],
+    switchAccount: mutateResult.mutate as Return["switchAccount"],
+    switchAccountAsync: mutateResult.mutateAsync as Return["switchAccountAsync"],
+  });
 }

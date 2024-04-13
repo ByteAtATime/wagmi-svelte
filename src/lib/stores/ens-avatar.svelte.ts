@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetEnsAvatarErrorType, ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -17,8 +23,9 @@ import { createConfig } from "./config.svelte";
 export type CreateEnsAvatarParameters<
   config extends Config = Config,
   selectData = GetEnsAvatarData,
-> = Evaluate<
-  GetEnsAvatarOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    GetEnsAvatarOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       GetEnsAvatarQueryFnData,
@@ -26,6 +33,7 @@ export type CreateEnsAvatarParameters<
       selectData,
       GetEnsAvatarQueryKey<config>
     >
+  >
 >;
 
 export type CreateEnsAvatarReturnType<selectData = GetEnsAvatarData> = RuneReturnType<
@@ -38,19 +46,22 @@ export function createEnsAvatar<
 >(
   parameters: CreateEnsAvatarParameters<config, selectData> = {},
 ): CreateEnsAvatarReturnType<selectData> {
-  const { name, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { name, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getEnsAvatarQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
-  const enabled = Boolean(name && (query.enabled ?? true));
+  const options = $derived(
+    getEnsAvatarQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
+  const enabled = $derived(Boolean(name && (query.enabled ?? true)));
 
-  const store = createQuery({ ...query, ...options, enabled });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

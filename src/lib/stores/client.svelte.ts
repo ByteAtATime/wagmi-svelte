@@ -1,4 +1,4 @@
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import type { ConfigParameter, FuncOrVal, RuneReturnType } from "$lib/types";
 import {
   type Config,
   type GetClientParameters,
@@ -13,42 +13,38 @@ import { createConfig } from "./config.svelte";
 export type CreateClientParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | number | undefined =
-    | config["chains"][number]["id"]
-    | undefined,
-> = Evaluate<GetClientParameters<config, chainId> & ConfigParameter<config>>;
+  | config["chains"][number]["id"]
+  | undefined,
+> = FuncOrVal<Evaluate<GetClientParameters<config, chainId> & ConfigParameter<config>>>;
 
 export type CreateClientReturnType<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] | number | undefined =
-    | config["chains"][number]["id"]
-    | undefined,
+  | config["chains"][number]["id"]
+  | undefined,
 > = RuneReturnType<GetClientReturnType<config, chainId>>;
 
 export function createClient<
   config extends Config = ResolvedRegister["config"],
   chainId extends config["chains"][number]["id"] | number | undefined =
-    | config["chains"][number]["id"]
-    | undefined,
+  | config["chains"][number]["id"]
+  | undefined,
 >(
   parameters: CreateClientParameters<config, chainId> = {},
 ): CreateClientReturnType<config, chainId> {
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  let client = $state(getClient(config.result));
+  let client = $state(getClient(config));
   let unsubscribe: (() => void) | undefined;
 
   $effect(() => {
     unsubscribe?.();
-    unsubscribe = watchClient(config.result, {
+    unsubscribe = watchClient(config, {
       onChange: (newClient) => {
         client = newClient;
       },
     });
   });
 
-  return {
-    get result() {
-      return client as GetClientReturnType<config, chainId>;
-    },
-  };
+  return () => client as GetClientReturnType<config, chainId>;
 }

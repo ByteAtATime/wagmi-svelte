@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetProofErrorType } from "@wagmi/core";
 import {
@@ -10,45 +16,38 @@ import {
   type GetProofQueryFnData,
   type GetProofQueryKey,
 } from "@wagmi/core/query";
-import { derived } from "svelte/store";
 import { createChainId } from "./chain-id.svelte";
 import { createConfig } from "./config.svelte";
 
 export type CreateProofParameters<
   config extends Config = Config,
   selectData = GetProofData,
-> = GetProofOptions<config> &
+> = FuncOrVal<
+  GetProofOptions<config> &
   ConfigParameter<config> &
-  QueryParameter<GetProofQueryFnData, GetProofErrorType, selectData, GetProofQueryKey<config>>;
+  QueryParameter<GetProofQueryFnData, GetProofErrorType, selectData, GetProofQueryKey<config>>
+>;
 
 export type CreateProofReturnType<selectData = GetProofData> = RuneReturnType<
   QueryObserverResult<selectData, GetProofErrorType>
 >;
 
 export function createProof(parameters: CreateProofParameters = {}): CreateProofReturnType {
-  const { address, storageKeys, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { address, storageKeys, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = createChainId();
+  const config = $derived.by(createConfig(parameters));
+  const chainId = $derived.by(createChainId());
 
-  const options = getProofQueryOptions(config.result, {
-    ...parameters,
-    chainId: parameters.chainId ?? chainId.result,
-  });
+  const options = $derived(
+    getProofQueryOptions(config, {
+      ...resolvedParameters,
+      chainId: resolvedParameters.chainId ?? chainId,
+    }),
+  );
   const enabled = $derived(Boolean(address && storageKeys && (query.enabled ?? true)));
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

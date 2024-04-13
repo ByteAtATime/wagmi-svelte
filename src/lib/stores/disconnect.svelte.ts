@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type RuneReturnType, type FuncOrVal } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import { type Connector, type DisconnectErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -11,15 +11,22 @@ import {
   disconnectMutationOptions,
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 import { createConnections } from "./connections.svelte";
 
-export type CreateDisconnectParameters<context = unknown> = Evaluate<
-  ConfigParameter & {
-    mutation?:
-      | CreateMutationParameters<DisconnectData, DisconnectErrorType, DisconnectVariables, context>
+export type CreateDisconnectParameters<context = unknown> = FuncOrVal<
+  Evaluate<
+    ConfigParameter & {
+      mutation?:
+      | CreateMutationParameters<
+        DisconnectData,
+        DisconnectErrorType,
+        DisconnectVariables,
+        context
+      >
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateDisconnectReturnType<context = unknown> = RuneReturnType<
@@ -33,31 +40,32 @@ export type CreateDisconnectReturnType<context = unknown> = RuneReturnType<
 >;
 
 export function createDisconnect<context = unknown>(
-  parameters: CreateDisconnectParameters<context> = {},
+  parameters: CreateDisconnectParameters<context> = {} as any,
 ): CreateDisconnectReturnType<context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const connections = createConnections({ config: config.result });
+  const config = $derived.by(createConfig(parameters));
+  const connections = $derived.by(createConnections({ config }));
 
-  const mutationOptions = disconnectMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
-  });
+  const mutationOptions = disconnectMutationOptions(config);
+  const store = createMutation<DisconnectData, DisconnectErrorType, DisconnectVariables, context>(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
 
-  const mutateResult = storeToRune(store);
+  const mutateResult = $derived.by(storeToRune(store));
 
+  type Return = ReturnType<CreateDisconnectReturnType<context>>;
   const result = $derived({
-    ...mutateResult.result,
-    disconnect: mutateResult.result.mutate,
-    disconnectAsync: mutateResult.result.mutateAsync,
-    connectors: connections.result.map((connection) => connection.connector),
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    disconnect: mutateResult.mutate,
+    disconnectAsync: mutateResult.mutateAsync,
+    connectors: connections.map((connection) => connection.connector),
   });
 
-  return {
-    get result() {
-      return result;
-    },
-  };
+  return () => result;
 }

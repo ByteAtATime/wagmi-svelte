@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, ResolvedRegister, VerifyMessageErrorType } from "@wagmi/core";
 import {
@@ -17,14 +23,16 @@ import { createConfig } from "./config.svelte";
 export type CreateVerifyMessageParameters<
   config extends Config = Config,
   selectData = VerifyMessageData,
-> = VerifyMessageOptions<config> &
+> = FuncOrVal<
+  VerifyMessageOptions<config> &
   ConfigParameter<config> &
   QueryParameter<
     VerifyMessageQueryFnData,
     VerifyMessageErrorType,
     selectData,
     VerifyMessageQueryKey<config>
-  >;
+  >
+>;
 
 export type CreateVerifyMessageReturnType<selectData = VerifyMessageData> = RuneReturnType<
   QueryObserverResult<selectData, VerifyMessageErrorType>
@@ -36,29 +44,22 @@ export function createVerifyMessage<
 >(
   parameters: CreateVerifyMessageParameters<config, selectData> = {},
 ): CreateVerifyMessageReturnType<selectData> {
-  const { address, message, signature, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { address, message, signature, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const chainId = parameters.chainId ?? createChainId().result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = verifyMessageQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    verifyMessageQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = $derived(Boolean(address && message && signature && (query.enabled ?? true)));
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

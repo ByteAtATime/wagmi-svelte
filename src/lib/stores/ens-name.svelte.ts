@@ -1,6 +1,12 @@
 import { createQuery } from "$lib/query";
-import { storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type QueryParameter,
+  type RuneReturnType,
+  type FuncOrVal,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import type { Config, GetEnsNameErrorType, ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -17,8 +23,9 @@ import { createConfig } from "./config.svelte";
 export type CreateEnsNameParameters<
   config extends Config = Config,
   selectData = GetEnsNameData,
-> = Evaluate<
-  GetEnsNameOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    GetEnsNameOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       GetEnsNameQueryFnData,
@@ -26,6 +33,7 @@ export type CreateEnsNameParameters<
       selectData,
       GetEnsNameQueryKey<config>
     >
+  >
 >;
 
 export type CreateEnsNameReturnType<selectData = GetEnsNameData> = RuneReturnType<
@@ -38,19 +46,22 @@ export function createEnsName<
 >(
   parameters: CreateEnsNameParameters<config, selectData> = {},
 ): CreateEnsNameReturnType<selectData> {
-  const { address, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { address, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getEnsNameQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
-  const enabled = Boolean(address && (query.enabled ?? true));
+  const options = $derived(
+    getEnsNameQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
+  const enabled = $derived(Boolean(address && (query.enabled ?? true)));
 
-  const store = createQuery({ ...query, ...options, enabled });
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

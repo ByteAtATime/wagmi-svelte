@@ -1,5 +1,5 @@
 import type { CreateMutationParameters } from "$lib/query";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import { resolveVal, type ConfigParameter, type FuncOrVal, type RuneReturnType } from "$lib/types";
 import { createMutation, type MutationObserverResult } from "@tanstack/svelte-query";
 import { type Connector, type ReconnectErrorType } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -11,14 +11,16 @@ import {
   reconnectMutationOptions,
 } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
-import { storeToRune } from "$lib/runes.svelte";
+import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
-export type CreateReconnectParameters<context = unknown> = Evaluate<
-  ConfigParameter & {
-    mutation?:
+export type CreateReconnectParameters<context = unknown> = FuncOrVal<
+  Evaluate<
+    ConfigParameter & {
+      mutation?:
       | CreateMutationParameters<ReconnectData, ReconnectErrorType, ReconnectVariables, context>
       | undefined;
-  }
+    }
+  >
 >;
 
 export type CreateReconnectReturnType<context = unknown> = RuneReturnType<
@@ -34,28 +36,29 @@ export type CreateReconnectReturnType<context = unknown> = RuneReturnType<
 export function createReconnect<context = unknown>(
   parameters: CreateReconnectParameters<context> = {},
 ): CreateReconnectReturnType<context> {
-  const { mutation } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { mutation } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
 
-  const mutationOptions = reconnectMutationOptions(config.result);
-  const store = createMutation({
-    ...mutation,
-    ...mutationOptions,
-  });
+  const mutationOptions = $derived(reconnectMutationOptions(config));
+  const store = createMutation<ReconnectData, ReconnectErrorType, ReconnectVariables, context>(
+    runeToStore(() => ({
+      ...mutation,
+      ...mutationOptions,
+    })),
+  );
 
-  const mutateResult = storeToRune(store);
+  const mutateResult = $derived.by(storeToRune(store));
 
+  type Return = ReturnType<CreateReconnectReturnType<context>>;
   const result = $derived({
-    ...mutateResult.result,
-    reconnect: mutateResult.result.mutate,
-    reconnectAsync: mutateResult.result.mutateAsync,
-    connectors: config.result.connectors,
+    ...mutateResult,
+    mutate: mutateResult.mutate as Return["mutate"],
+    reconnect: mutateResult.mutate,
+    reconnectAsync: mutateResult.mutateAsync,
+    connectors: config.connectors,
   });
 
-  return {
-    get result() {
-      return result;
-    },
-  };
+  return () => result;
 }

@@ -1,4 +1,10 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type GetStorageAtErrorType, type ResolvedRegister } from "@wagmi/core";
 import type { Evaluate } from "@wagmi/core/internal";
@@ -12,14 +18,14 @@ import { type GetStorageAtQueryFnData } from "@wagmi/core/query";
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
 import { createQuery } from "$lib/query";
-import { derived } from "svelte/store";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreatesStorageAtParameters<
   config extends Config = Config,
   selectData = GetStorageAtData,
-> = Evaluate<
-  GetStorageAtOptions<config> &
+> = FuncOrVal<
+  Evaluate<
+    GetStorageAtOptions<config> &
     ConfigParameter<config> &
     QueryParameter<
       GetStorageAtQueryFnData,
@@ -27,6 +33,7 @@ export type CreatesStorageAtParameters<
       selectData,
       GetStorageAtQueryKey<config>
     >
+  >
 >;
 
 export type CreateStorageAtReturnType<selectData = GetStorageAtData> = RuneReturnType<
@@ -39,33 +46,27 @@ export function createStorageAt<
 >(
   parameters: CreatesStorageAtParameters<config, selectData> = {},
 ): CreateStorageAtReturnType<selectData> {
-  const { address, slot, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { address, slot, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getStorageAtQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getStorageAtQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = $derived(Boolean(address && slot && (query.enabled ?? true)));
 
   const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({
-        ...query,
-        ...options,
-        enabled: $enabled,
-      }),
-    ),
+    runeToStore(() => ({
+      ...query,
+      ...options,
+      enabled,
+    })),
   );
 
   return storeToRune(store);

@@ -18,11 +18,11 @@ export type QueryParameter<
   queryKey extends QueryKey = QueryKey,
 > = {
   query?:
-    | Omit<
-        CreateQueryParameters<queryFnData, error, data, queryKey>,
-        "queryFn" | "queryHash" | "queryKey" | "queryKeyHashFn" | "throwOnError"
-      >
-    | undefined;
+  | Omit<
+    CreateQueryParameters<queryFnData, error, data, queryKey>,
+    "queryFn" | "queryHash" | "queryKey" | "queryKeyHashFn" | "throwOnError"
+  >
+  | undefined;
 };
 
 export type InfiniteQueryParameter<
@@ -39,8 +39,10 @@ export type InfiniteQueryParameter<
   >;
 };
 
-export type RuneReturnType<T> = {
-  result: T;
-};
+export type FuncOrVal<T> = T | (() => T);
+export const resolveVal = <T>(val: FuncOrVal<T>): T => (val instanceof Function ? val() : val);
+export type ParamType<T> = T extends FuncOrVal<infer U> ? U : never;
+
+export type RuneReturnType<T> = () => T;
 
 export type RuneReturnTypeToStore<T> = T extends RuneReturnType<infer U> ? Readable<U> : never;

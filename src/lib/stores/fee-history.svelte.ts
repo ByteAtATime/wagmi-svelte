@@ -1,4 +1,10 @@
-import type { ConfigParameter, QueryParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type QueryParameter,
+  type RuneReturnType,
+} from "$lib/types";
 import type { QueryObserverResult } from "@tanstack/svelte-query";
 import { type Config, type GetFeeHistoryErrorType, type ResolvedRegister } from "@wagmi/core";
 import { type Evaluate } from "@wagmi/core/internal";
@@ -12,15 +18,15 @@ import {
 import { createConfig } from "./config.svelte";
 import { createChainId } from "./chain-id.svelte";
 import { createQuery } from "$lib/query";
-import { derived } from "svelte/store";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
 
 export type CreateFeeHistoryParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetFeeHistoryData,
-> = Evaluate<
-  GetFeeHistoryOptions<config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    GetFeeHistoryOptions<config, chainId> &
     ConfigParameter<config> &
     QueryParameter<
       GetFeeHistoryQueryFnData,
@@ -28,6 +34,7 @@ export type CreateFeeHistoryParameters<
       selectData,
       GetFeeHistoryQueryKey<config, chainId>
     >
+  >
 >;
 
 export type CreateFeeHistoryReturnType<selectData = GetFeeHistoryData> = RuneReturnType<
@@ -41,30 +48,22 @@ export function createFeeHistory<
 >(
   parameters: CreateFeeHistoryParameters<config, chainId, selectData> = {},
 ): CreateFeeHistoryReturnType<selectData> {
-  const { blockCount, rewardPercentiles, query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { blockCount, rewardPercentiles, query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const config = $derived.by(createConfig(parameters));
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const options = getFeeHistoryQueryOptions(config.result, {
-    ...parameters,
-    chainId,
-  });
+  const options = $derived(
+    getFeeHistoryQueryOptions(config, {
+      ...resolvedParameters,
+      chainId,
+    }),
+  );
   const enabled = $derived(Boolean(blockCount && rewardPercentiles && (query.enabled ?? true)));
 
-  const store = createQuery(
-    derived(
-      [
-        runeToStore({
-          get result() {
-            return enabled;
-          },
-        }),
-      ],
-      ([$enabled]) => ({ ...query, ...options, enabled: $enabled }),
-    ),
-  );
+  const store = createQuery(runeToStore(() => ({ ...query, ...options, enabled })));
 
   return storeToRune(store);
 }

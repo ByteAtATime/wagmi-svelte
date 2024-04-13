@@ -1,8 +1,13 @@
 import { createQuery, type CreateQueryParameters } from "$lib/query";
 import { runeToStore, storeToRune } from "$lib/runes.svelte";
-import type { ConfigParameter, RuneReturnType } from "$lib/types";
+import {
+  resolveVal,
+  type ConfigParameter,
+  type FuncOrVal,
+  type RuneReturnType,
+  type RuneReturnTypeToStore,
+} from "$lib/types";
 import { useQueryClient, type QueryObserverResult } from "@tanstack/svelte-query";
-import { derived } from "svelte/store";
 import { createAccount } from "./account.svelte";
 import { createChainId } from "./chain-id.svelte";
 import { createConfig } from "./config.svelte";
@@ -20,23 +25,25 @@ export type CreateWalletClientParameters<
   config extends Config = Config,
   chainId extends config["chains"][number]["id"] = config["chains"][number]["id"],
   selectData = GetWalletClientData<config, chainId>,
-> = Evaluate<
-  GetWalletClientOptions<config, chainId> &
+> = FuncOrVal<
+  Evaluate<
+    GetWalletClientOptions<config, chainId> &
     ConfigParameter<config> & {
       query?:
-        | Evaluate<
-            Omit<
-              CreateQueryParameters<
-                GetWalletClientQueryFnData<config, chainId>,
-                GetWalletClientErrorType,
-                selectData,
-                GetWalletClientQueryKey<config, chainId>
-              >,
-              "gcTime" | "staleTime"
-            >
-          >
-        | undefined;
+      | Evaluate<
+        Omit<
+          CreateQueryParameters<
+            GetWalletClientQueryFnData<config, chainId>,
+            GetWalletClientErrorType,
+            selectData,
+            GetWalletClientQueryKey<config, chainId>
+          >,
+          "gcTime" | "staleTime"
+        >
+      >
+      | undefined;
     }
+  >
 >;
 
 export type CreateWalletClientReturnType<
@@ -52,46 +59,37 @@ export function createWalletClient<
 >(
   parameters: CreateWalletClientParameters<config, chainId, selectData> = {},
 ): CreateWalletClientReturnType<config, chainId, selectData> {
-  const { query = {} } = parameters;
+  const resolvedParameters = $derived(resolveVal(parameters));
+  const { query = {} } = $derived(resolvedParameters);
 
-  const config = createConfig(parameters);
+  const config = $derived.by(createConfig(parameters));
   const queryClient = useQueryClient();
-  const account = createAccount();
-  const configChainId = createChainId();
-  const chainId = parameters.chainId ?? configChainId.result;
+  const account = $derived.by(createAccount());
+  const configChainId = $derived.by(createChainId());
+  const chainId = $derived(resolvedParameters.chainId ?? configChainId);
 
-  const { queryKey, ...options } = getWalletClientQueryOptions<config, chainId>(
-    config.result as config,
-    {
-      ...parameters,
+  const { queryKey, ...options } = $derived(
+    getWalletClientQueryOptions<config, chainId>(config as config, {
+      ...resolvedParameters,
       chainId,
-      connector: parameters.connector ?? account.result.connector,
-    },
+      connector: resolvedParameters.connector ?? account.connector,
+    }),
   );
-  const enabled = $derived(
-    Boolean(account.result.status !== "disconnected" && (query.enabled ?? true)),
-  );
+  const enabled = $derived(Boolean(account.status !== "disconnected" && (query.enabled ?? true)));
 
   $effect(() => {
-    if (account.result.address) queryClient.invalidateQueries({ queryKey });
+    if (account.address) queryClient.invalidateQueries({ queryKey });
     else queryClient.removeQueries({ queryKey }); // remove when account is disconnected
   });
 
   const store = createQuery(
-    derived(
-      runeToStore({
-        get result() {
-          return enabled;
-        },
-      }),
-      ($enabled) => ({
-        ...query,
-        ...options,
-        queryKey,
-        enabled: $enabled,
-        staleTime: Infinity,
-      }),
-    ),
+    runeToStore(() => ({
+      ...query,
+      ...options,
+      queryKey,
+      enabled,
+      staleTime: Infinity,
+    })),
   );
 
   return storeToRune(store);
