@@ -44,7 +44,7 @@ export const createBalance = <config extends Config = Config, selectData = GetBa
   parameters: CreateBalanceParameters<config, selectData> = {},
 ): CreateBalanceReturnType<selectData> => {
   const resolvedParameters = $derived(resolveVal(parameters));
-  const { address, query = {} } = resolvedParameters;
+  const { address, query = {} } = $derived(resolvedParameters);
 
   const config = $derived.by(createConfig(parameters));
   const configChainId = $derived.by(createChainId());
